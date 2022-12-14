@@ -1,0 +1,54 @@
+service: leighton-eventbrdige-test
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs16.x
+  stage: ${opt:stage}
+  region: eu-west-2
+  deploymentBucket:
+    blockPublicAccess: true
+
+plugins:
+  - serverless-plugin-typescript
+
+functions:
+  sendEventToBus:
+    handler: src/api.handler
+    role: apiRole
+    logRetentionInDays: ${self:custom.retainLogs}
+    environment:
+      EVENT_BUS_NAME: ${self:custom.eventBusName}
+    events:
+      - http:
+          path: /submit-event
+          method: post       
+
+
+  processQueueItems:
+    handler: src/queue.handler
+    role: processQueueItemsRole
+    logRetentionInDays: ${self:custom.retainLogs}
+    environment:
+      EVENT_BUS_NAME: ${self:custom.eventBusName}
+    events:
+      - sqs:
+          arn:
+            Fn::GetAtt:
+              - serviceQueue
+              - Arn 
+
+
+custom:
+  retainLogs: 30
+  eventBusName: ${self:service}-${opt:stage}-eventbus
+  eventBusARN: !GetAtt EventBridgeBus.Arn
+
+
+resources:
+  - ${file(./resources/eventBridge.yml)}
+  - ${file(./resources/sqs.yml)}
+  - ${file(./roles/api.yml)}
+  - ${file(./roles/queue.yml)}
+
+  
